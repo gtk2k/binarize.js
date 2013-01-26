@@ -1,5 +1,8 @@
-describe("ObjectSerializer", function() {
-  var originalObject, buffer, array, expectdArray, expectedHex;
+
+var Test = binarize;
+describe("ObjectSerializer", function () {
+    var originalObject, buffer, array, expectdArray, expectedHex;
+
   var typed = new Float64Array([1, Number.MAX_VALUE, Number.MIN_VALUE]);
 
   beforeEach(function() {

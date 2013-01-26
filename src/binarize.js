@@ -15,6 +15,7 @@ limitations under the License.
 
 Author: Eiji Kitamura (agektmr@gmail.com)
 */
+
 (function(global) {
   var debug = false;
 
@@ -22,24 +23,25 @@ Author: Eiji Kitamura (agektmr@gmail.com)
       LITTLE_ENDIAN = true,
       TYPE_LENGTH   = Uint8Array.BYTES_PER_ELEMENT,
       LENGTH_LENGTH = Uint16Array.BYTES_PER_ELEMENT,
-      BYTES_LENGTH  = Uint16Array.BYTES_PER_ELEMENT;
+      BYTES_LENGTH  = Uint32Array.BYTES_PER_ELEMENT;
 
   var Types = {
-    NULL:          0,
-    UNDEFINED:     1,
-    STRING:        2,
-    NUMBER:        3,
-    BOOLEAN:       4,
-    ARRAY:         5,
-    OBJECT:        6,
-    INT8ARRAY:     7,
-    INT16ARRAY:    8,
-    INT32ARRAY:    9,
-    UINT8ARRAY:    10,
-    UINT16ARRAY:   11,
-    UINT32ARRAY:   12,
-    FLOAT32ARRAY:  13,
-    FLOAT64ARRAY:  14
+    NULL:              0,
+    UNDEFINED:         1,
+    STRING:            2,
+    NUMBER:            3,
+    BOOLEAN:           4,
+    ARRAY:             5,
+    OBJECT:            6,
+    INT8ARRAY:         7,
+    INT16ARRAY:        8,
+    INT32ARRAY:        9,
+    UINT8ARRAY:        10,
+    UINT16ARRAY:       11,
+    UINT32ARRAY:       12,
+    FLOAT32ARRAY:      13,
+    FLOAT64ARRAY:      14,
+    UINT8CLAMPEDARRAY: 15
   };
 
   var Length = [
@@ -57,7 +59,8 @@ Author: Eiji Kitamura (agektmr@gmail.com)
     'Uint16',         // Types.UINT16ARRAY
     'Uint32',         // Types.UINT32ARRAY
     'Float32',        // Types.FLOAT32ARRAY
-    'Float64'         // Types.FLOAT64ARRAY
+    'Float64',        // Types.FLOAT64ARRAY
+    'Uint8Clamped'    // Types.UINT8CLAMPEDARRAY
   ];
 
   /**
@@ -78,7 +81,7 @@ Author: Eiji Kitamura (agektmr@gmail.com)
           byte_length = serialized[i].byte_length,
           type_name   = Length[type],
           unit        = type_name === null ? 0 : global[type_name+'Array'].BYTES_PER_ELEMENT;
-
+      
       // Set type
       view.setUint8(cursor, type, endianness);
       cursor += TYPE_LENGTH;
@@ -90,10 +93,10 @@ Author: Eiji Kitamura (agektmr@gmail.com)
       }
 
       // Set byte length
-      view.setUint16(cursor, byte_length, endianness);
+      view.setUint32(cursor, byte_length, endianness);
       cursor += BYTES_LENGTH;
 
-      switch(type) {
+      switch (type) {
         case Types.NULL:
         case Types.UNDEFINED:
           // NULL and UNDEFINED doesn't have any payload
@@ -119,8 +122,10 @@ Author: Eiji Kitamura (agektmr@gmail.com)
         case Types.UINT32ARRAY:
         case Types.FLOAT32ARRAY:
         case Types.FLOAT64ARRAY:
+        case Types.UINT8CLAMPEDARRAY:
+          var method_name = type_name.replace('Clamped', '');
           for (j = 0; j < length; j++, cursor += unit) {
-            view['set'+type_name](cursor, value[j], endianness);
+            view['set'+method_name](cursor, value[j], endianness);
           }
           break;
 
@@ -157,13 +162,13 @@ Author: Eiji Kitamura (agektmr@gmail.com)
     }
 
     // Retrieve "byte_length"
-    byte_length = view.getUint16(cursor, endianness);
+    byte_length = view.getUint32(cursor, endianness);
     cursor += BYTES_LENGTH;
 
     var type_name = Length[type];
     var unit = type_name === null ? 0 : global[type_name+'Array'].BYTES_PER_ELEMENT;
 
-    switch(type) {
+    switch (type) {
       case Types.NULL:
       case Types.UNDEFINED:
         // NULL and UNDEFINED doesn't have any octet
@@ -195,10 +200,12 @@ Author: Eiji Kitamura (agektmr@gmail.com)
       case Types.UINT32ARRAY:
       case Types.FLOAT32ARRAY:
       case Types.FLOAT64ARRAY:
+      case Types.UINT8CLAMPEDARRAY:
         elem = [];
         length = byte_length / unit;
+        var method_name = type_name.replace('Clamped', '');
         for (i = 0; i < length; i++, cursor += unit) {
-          elem.push(view['get'+type_name](cursor, endianness));
+          elem.push(view['get'+method_name](cursor, endianness));
         }
         value = new global[type_name+'Array'](elem);
         break;
@@ -276,6 +283,7 @@ Author: Eiji Kitamura (agektmr@gmail.com)
         case Types.UINT32ARRAY:
         case Types.FLOAT32ARRAY:
         case Types.FLOAT64ARRAY:
+        case Types.UINT8CLAMPEDARRAY:
           byte_length += obj.length * unit;
           length = obj.length;
           break;

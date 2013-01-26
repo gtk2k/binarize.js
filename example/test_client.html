@@ -1,0 +1,157 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title>Uint8ClampedArray画像送信テスト</title>
+    <script src="binarize.js"></script>
+    <script>
+        var frameIndex = 0;
+        var rafId = 0;
+        var img = new Image();
+        var imgFiles = [];
+        var imgWidth, imgHeight;
+        var sndcnv, sndctx, reccnv, recctx, recimg, ws;
+
+        function load() {
+            sndcnv = document.getElementById('sndcnv');
+            sndctx = sndcnv.getContext('2d');
+            reccnv = document.getElementById('reccnv');
+            recctx = reccnv.getContext('2d');
+            setupWebsocket();
+        }
+
+        function setupWebsocket(){
+            ws = new WebSocket('ws://gtk2k.com');
+            ws.binaryType = 'arraybuffer';
+            ws.onopen = function(){
+                init();
+            }
+            ws.onmessage = function (msg) {
+                if (msg.data === 'next') {
+                    frameIndex++;
+                    if (frameIndex == imgFiles.length) frameIndex = 0;
+                    img.src = imgFiles[frameIndex];
+                } else {
+                    receiveImage(msg);
+                }
+            };
+            ws.onclose = function () {
+                console.log('close');
+            }
+        }
+
+        function init(){
+            document.addEventListener('dragover', function (e) {
+                e.preventDefault();
+            }, false);
+            document.addEventListener('drop', function (e) {
+                e.preventDefault();
+                if (e.dataTransfer.items && e.dataTransfer.items.length) {
+                    var entry = e.dataTransfer.items[0].webkitGetAsEntry();
+                    if (entry.isDirectory) {
+                        var directoryReader = entry.createReader();
+                        directoryReader.readEntries(function (entries) {
+                            if (entries.length) {
+                                var files = [];
+                                var ei = -1;
+                                var getFile = function (file) {
+                                    files.push(file);
+                                    next();
+                                }
+                                var next = function () {
+                                    do {
+                                        ei++;
+                                        if (ei == entries.length) {
+                                            checkImageFile(files);
+                                            return;
+                                        }
+                                    } while (!entries[ei].isFile);
+                                    entries[ei].file(getFile);
+                                }
+                                next();
+                            }
+                        });
+                    }
+                }
+            }, false);
+        }
+
+        function checkImageFile(files){
+            if (files.length) {
+                files.sort(function (a, b) {
+                    if (a.name < b.name) return -1;
+                    if (a.name > b.name) return 1;
+                    return 0;
+                });
+                var fi = 0;
+                imgFiles = [];
+                var next = function () {
+                    fi++;
+                    if (fi < files.length) {
+                        img.src = URL.createObjectURL(files[fi]);
+                    } else {
+                        frameIndex = 0;
+                        animate();
+                    }
+                }
+                img.onload = function () {
+                    imgFiles.push(img.src);
+                    next();
+                }
+                img.onerror = function () {
+                    next();
+                }
+                img.src = URL.createObjectURL(files[0]);
+            }
+        }
+        function animate() {
+            img.onload = function () {
+                var sndData = {}
+                if (img.width != sndcnv.width || img.height != sndcnv.height) {
+                    sndcnv.width = img.width;
+                    sndcnv.style.width = img.width + 'px';
+                    sndcnv.height = img.height;
+                    sndcnv.style.height = img.height + 'px';
+                    sndData.width = img.width;
+                    sndData.height = img.height;
+                }
+                sndctx.drawImage(img, 0, 0, sndcnv.width, sndcnv.height);
+                var imgData = sndctx.getImageData(0, 0, sndcnv.width, sndcnv.height);
+                sndData.data = imgData.data;
+                var packData = binarize.pack(sndData);
+                ws.send(packData);
+            }
+            img.src = imgFiles[frameIndex];
+        }
+
+        function receiveImage(msg){
+            var recData = binarize.unpack(msg.data);
+            if (recData.width) {
+                if (recData.width != reccnv.width || recData.height != reccnv.height) {
+                    reccnv.width = recData.width;
+                    reccnv.style.width = recData.width + 'px';
+                    reccnv.height = recData.height;
+                    reccnv.style.height = recData.height + 'px';
+                    recimg = null;
+                    recimg = recctx.getImageData(0, 0, recData.width, recData.height);
+                }
+            }
+            recimg.data.set(recData.data);
+            recctx.putImageData(recimg, 0, 0);
+            ws.send('next');
+        }
+    </script>
+</head>
+<body onload="load()">
+    <span>画像の入ったフォルダをドラッグアンドドロップしてください。</span>
+    <div>
+        <div>送信画像</div>
+        <canvas id="sndcnv"></canvas>
+    </div>
+    <div>
+        <div>受信画像</div>
+        <canvas id="reccnv"></canvas>
+    </div>
+</body>
+</html>
